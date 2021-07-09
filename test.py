@@ -76,14 +76,13 @@ HS10단위 = {}
 적출국가 = {}
 원산지국가 = {}
 관세율구분 = {}
-검사결과 = {}
 
 
 # 한 번에 다루기 편하도록 list에 담음
 attributes = [월별통계, 통관지세관, 신고인, 수입자, 해외거래처, 특송업체, 수입통관계획, 수입신고구분,
-              수입거래구분, 수입종류, 징수형태, 운송수단유형, 반입보세구역, HS10단위, 적출국가, 원산지국가, 관세율구분, 검사결과]
+              수입거래구분, 수입종류, 징수형태, 운송수단유형, 반입보세구역, HS10단위, 적출국가, 원산지국가, 관세율구분]
 attributes_str = ["월별통계", "통관지세관", "신고인", "수입자", "해외거래처", "특송업체", "수입통관계획", "수입신고구분",
-                  "수입거래구분", "수입종류", "징수형태", "운송수단유형", "반입보세구역", "HS10단위", "적출국가", "원산지국가", "관세율구분", "검사결과"]
+                  "수입거래구분", "수입종류", "징수형태", "운송수단유형", "반입보세구역", "HS10단위", "적출국가", "원산지국가", "관세율구분"]
 
 
 # 3개 (적당한 범위 필요) -> 일단 포함 X
@@ -113,9 +112,8 @@ attributes_str = ["월별통계", "통관지세관", "신고인", "수입자", "
 # 적출국가코드 = line[17]
 # 원산지국가코드 = line[18]
 # 관세율구분코드 = line[19]
-# 검사결과코드 = line[21]
-# 우범여부 = line[22]
-# 핵심적발 = line[23]
+# 우범여부 = line[21]
+# 핵심적발 = line[22]
 
 
 # 비교 연산을 위한 min, max함수
@@ -139,7 +137,6 @@ def preprocessing(reader, attributes):
         keys.append(line[1][5:7])
         keys.extend(line[2:12])
         keys.extend(line[14:20])
-        keys.append(line[21])
 
         # 인스턴스별 전체신고수, 우범수, 핵심적발수를 딕셔너리에 리스트 형태로 저장
         # ex) {"1월": [전체신고수, 우범수, 핵심적발수], ...}
@@ -149,32 +146,44 @@ def preprocessing(reader, attributes):
             else:
                 attributes[_][keys[_]][0] += 1
 
-            if line[22] == '1':
+            if line[21] == '1':
                 attributes[_][keys[_]][1] += 1
-            if line[23] == '2':
+            if line[22] == '2':
                 attributes[_][keys[_]][2] += 1
 
     # 위의 for문을 돌며 구한 전체신고수, 우범수, 핵심적발수를 통해
     # 우범률, 핵심적발률을 구함
+    total = 0
+    total_우범 = 0
+    total_핵심 = 0
     for attribute in attributes:
         for instance in attribute:
             li = attribute[instance]
             li.extend([round(li[1]/li[0]*100, 2), round(li[2]/li[0]*100, 2)])
+            total += 1
+            total_우범 += li[3]
+            total_핵심 += li[4]
 
-    return attributes
+    총우범평균 = total_우범/total
+    총핵심평균 = total_핵심/total
+
+    return attributes, 총우범평균, 총핵심평균
 
 
+총우범평균, 총핵심평균 = 0, 0
 # train.csv 파일을 열어 전처리 함수 호출
 with open('train.csv', 'r', encoding="utf-8") as f:
     reader = csv.reader(f)
-    attributes = preprocessing(reader, attributes)
+    attributes, 총우범평균, 총핵심평균 = preprocessing(reader, attributes)
 
 
 # info 딕셔너리에 각 attribute를 확장
 info = {}
+i = 0
 for _ in range(len(attributes_str)):
     info[attributes_str[_]] = attributes[_]
 
+print(info)
 # info = {
 #   {"attribute1":
 #       {"instance1":[총신고량, 우범량, 핵심적발량, 우범률, 핵심적발률]},
@@ -187,37 +196,23 @@ for _ in range(len(attributes_str)):
 #   }
 #   ...
 # }
-
-
-# README의 3, 4 과정
-우범min, 핵심min = 100.0, 100.0
-not우범max, not핵심max = 0.0, 0.0
-우범sum, 핵심sum = 0.0, 0.0
-not우범sum, not핵심sum = 0.0, 0.0
-total우범, total핵심 = 0, 0
-totalnot우범, totalnot핵심 = 0, 0
-우범correct, 핵심correct = 0, 0
-totalnum = 0
-
-# test.csv로 모델(?)의 정확도 구하기
+csv_data = []
+j = 1
 with open('test.csv', 'r', encoding='utf-8') as f:
     datas = csv.reader(f)
 
     for data in datas:
-        # 첫번째 튜플에는 attribute가 적혀있으므로 건너뜀
-        if data[0] == "신고일자":
+        csv_data.append(data)
+        if data[0] == "신고번호":
             continue
 
-        # 해당 튜플의 각 attribute의 인스턴스를 keys에 추가
         keys = []
-        keys.append(data[1-1][5:7])
-        keys.extend(data[2-1:12-1])
-        keys.extend(data[14-1:20-1])
-        keys.append(data[21-1])
+        keys.append(data[1][5:7])
+        keys.extend(data[2:12])
+        keys.extend(data[14:20])
 
-        # README의 3 과정
-        i = 0
         우범률, 핵심적발률 = 0, 0
+        i = 0
         for attribute in info:
             if keys[i] in info[attribute]:
                 우범률 += info[attribute][keys[i]][3]
@@ -227,67 +222,124 @@ with open('test.csv', 'r', encoding='utf-8') as f:
                 핵심적발률 += 50
             i += 1
 
-        i -= 1
-
-        # 검사결과코드 제외
-        if keys[i] in info["검사결과"]:
-            우범률 -= info["검사결과"][keys[i]][3]
-            핵심적발률 -= info["검사결과"][keys[i]][4]
-        else:
-            우범률 -= 50
-            핵심적발률 -= 50
-
         # 우범률, 핵심적발률
-        우범률 = round(우범률/18, 4)
-        핵심적발률 = round(핵심적발률/18, 4)
+        우범률 = round(우범률/17, 4)
+        핵심적발률 = round(핵심적발률/17, 4)
 
-        # print(우범률, 핵심적발률)
-
-        # 모델의 정확도 구함
-        # 전체우범평균, 전체not우범평균, 전체핵심적발평균, 전체not핵심적발평균을 구함
-        우범, 핵심 = False, False
-        if keys[i] in info["검사결과"]:
-            totalnum += 1
-            if info["검사결과"][keys[i]][3] == 100:
-                우범min = min(우범min, 우범률)
-                우범sum += 우범률
-                total우범 += 1
-                우범 = True
+        if 우범률 >= 총우범평균:
+            csv_data[j].append(1)
+            if 핵심적발률 >= 총핵심평균:
+                csv_data[j].append(2)
             else:
-                not우범max = max(not우범max, 우범률)
-                not우범sum += 우범률
-                totalnot우범 += 1
-            if info["검사결과"][keys[i]][4] == 100:
-                핵심min = min(핵심min, 핵심적발률)
-                핵심sum += 핵심적발률
-                total핵심 += 1
-                핵심 = True
-            else:
-                not핵심max = max(not핵심max, 핵심적발률)
-                not핵심sum += 핵심적발률
-                totalnot핵심 += 1
-            if 우범 == (우범률 > 23.965):
-                우범correct += 1
-            if 핵심 == (핵심적발률 > 13.615):
-                핵심correct += 1
-
-            # print("우범" if 우범 else "NOT우범",
-            #       "핵심" if 핵심 else "NOT핵심")
+                csv_data[j].append(1)
+        else:
+            csv_data[j].append(0)
+            csv_data[j].append(0)
+        j += 1
 
 
-# 변수 간략화
-전체우범평균, 전체핵심평균 = 우범sum/total우범, 핵심sum/total핵심
-전체not우범평균, 전체not핵심평균 = not우범sum/totalnot우범, not핵심sum/totalnot핵심
-우범정확도, 핵심정확도 = 우범correct/totalnum*100, 핵심correct/totalnum*100
+with open('result.csv', 'w', newline='') as f:
+    wr = csv.writer(f)
+    wr.writerows(csv_data)
 
-# 결과값 출력
-print()
-print(우범min, 핵심min)
-print(not우범max, not핵심max)
-print(전체우범평균, 전체핵심평균)
-print(전체not우범평균, 전체not핵심평균)
-print("정확도 :", 우범정확도, 핵심정확도)
-print("total 개수 :", totalnum)
+# # README의 3, 4 과정
+# 우범min, 핵심min = 100.0, 100.0
+# not우범max, not핵심max = 0.0, 0.0
+# 우범sum, 핵심sum = 0.0, 0.0
+# not우범sum, not핵심sum = 0.0, 0.0
+# total우범, total핵심 = 0, 0
+# totalnot우범, totalnot핵심 = 0, 0
+# 우범correct, 핵심correct = 0, 0
+# totalnum = 0
+
+# # test.csv로 모델(?)의 정확도 구하기
+# with open('test.csv', 'r', encoding='utf-8') as f:
+#     datas = csv.reader(f)
+
+#     for data in datas:
+#         # 첫번째 튜플에는 attribute가 적혀있으므로 건너뜀
+#         if data[0] == "신고일자":
+#             continue
+
+#         # 해당 튜플의 각 attribute의 인스턴스를 keys에 추가
+#         keys = []
+#         keys.append(data[1][5:7])
+#         keys.extend(data[2:12])
+#         keys.extend(data[14:20])
+
+#         # README의 3 과정
+#         i = 0
+#         우범률, 핵심적발률 = 0, 0
+#         for attribute in info:
+#             if keys[i] in info[attribute]:
+#                 우범률 += info[attribute][keys[i]][3]
+#                 핵심적발률 += info[attribute][keys[i]][4]
+#             else:
+#                 우범률 += 50
+#                 핵심적발률 += 50
+#             i += 1
+
+#         # i -= 1
+
+#         # # 검사결과코드 제외
+#         # if keys[i] in info["검사결과"]:
+#         #     우범률 -= info["검사결과"][keys[i]][3]
+#         #     핵심적발률 -= info["검사결과"][keys[i]][4]
+#         # else:
+#         #     우범률 -= 50
+#         #     핵심적발률 -= 50
+
+#         # 우범률, 핵심적발률
+#         우범률 = round(우범률/18, 4)
+#         핵심적발률 = round(핵심적발률/18, 4)
+
+#         # print(우범률, 핵심적발률)
+
+#         # 모델의 정확도 구함
+#         # 전체우범평균, 전체not우범평균, 전체핵심적발평균, 전체not핵심적발평균을 구함
+#         # 우범, 핵심 = False, False
+#         # if keys[i] in info["검사결과"]:
+#         #     totalnum += 1
+#         #     if info["검사결과"][keys[i]][3] == 100:
+#         #         우범min = min(우범min, 우범률)
+#         #         우범sum += 우범률
+#         #         total우범 += 1
+#         #         우범 = True
+#         #     else:
+#         #         not우범max = max(not우범max, 우범률)
+#         #         not우범sum += 우범률
+#         #         totalnot우범 += 1
+#         #     if info["검사결과"][keys[i]][4] == 100:
+#         #         핵심min = min(핵심min, 핵심적발률)
+#         #         핵심sum += 핵심적발률
+#         #         total핵심 += 1
+#         #         핵심 = True
+#         #     else:
+#         #         not핵심max = max(not핵심max, 핵심적발률)
+#         #         not핵심sum += 핵심적발률
+#         #         totalnot핵심 += 1
+#         #     if 우범 == (우범률 > 23.965):
+#         #         우범correct += 1
+#         #     if 핵심 == (핵심적발률 > 13.615):
+#         #         핵심correct += 1
+
+#         #     # print("우범" if 우범 else "NOT우범",
+#         #     #       "핵심" if 핵심 else "NOT핵심")
+
+
+# # 변수 간략화
+# 전체우범평균, 전체핵심평균 = 우범sum/total우범, 핵심sum/total핵심
+# 전체not우범평균, 전체not핵심평균 = not우범sum/totalnot우범, not핵심sum/totalnot핵심
+# 우범정확도, 핵심정확도 = 우범correct/totalnum*100, 핵심correct/totalnum*100
+
+# # 결과값 출력
+# print()
+# print(우범min, 핵심min)
+# print(not우범max, not핵심max)
+# print(전체우범평균, 전체핵심평균)
+# print(전체not우범평균, 전체not핵심평균)
+# print("정확도 :", 우범정확도, 핵심정확도)
+# print("total 개수 :", totalnum)
 
 
 # 인스턴스의 빠른 검색이 가능한 딕셔너리 형태의 json 파일로 저장
