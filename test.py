@@ -226,9 +226,9 @@ with open('test.csv', 'r', encoding='utf-8') as f:
         우범률 = round(우범률/17, 4)
         핵심적발률 = round(핵심적발률/17, 4)
 
-        if 우범률 >= 총우범평균:
+        if 우범률 >= 총우범평균-5:
             csv_data[j].append(1)
-            if 핵심적발률 >= 총핵심평균:
+            if 핵심적발률 >= 총핵심평균-2:
                 csv_data[j].append(2)
             else:
                 csv_data[j].append(1)
@@ -238,7 +238,7 @@ with open('test.csv', 'r', encoding='utf-8') as f:
         j += 1
 
 
-with open('result.csv', 'w', newline='') as f:
+with open('쑤엘라이트(SSUELITE).csv', 'w', newline='') as f:
     wr = csv.writer(f)
     wr.writerows(csv_data)
 
